@@ -1,0 +1,23 @@
+{
+  "manifest_version": 2,
+  "name": "Smart Tab Organizer",
+  "version": "0.1.0",
+  "description": "Automatically groups tabs by semantic similarity using local AI",
+  "permissions": ["tabs", "storage", "notifications", "http://localhost/*"],
+  "optional_permissions": ["<all_urls>"],
+  "background": {
+    "scripts": [
+      "browser-polyfill.js",
+      "storage.js",
+      "habits.js",
+      "embedding.js",
+      "background.js"
+    ],
+    "persistent": true
+  },
+  "icons": { "48": "icon.svg" },
+  "browser_action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Smart Tab Organizer"
+  }
+}
