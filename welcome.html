@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Welcome — Smart Tab Organizer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 600px;
+      margin: 48px auto;
+      padding: 0 24px 64px;
+      color: #1a1a1a;
+      line-height: 1.6;
+    }
+    .logo { font-size: 32px; margin-bottom: 4px; }
+    h1 { font-size: 22px; font-weight: 700; margin: 0 0 6px; }
+    .tagline { font-size: 15px; color: #555; margin: 0 0 36px; }
+
+    .step {
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    .step-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .step-num {
+      background: #4a90d9;
+      color: white;
+      font-size: 13px;
+      font-weight: 700;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .step-title { font-size: 16px; font-weight: 600; }
+
+    .backend-options { display: flex; gap: 12px; flex-wrap: wrap; }
+    .backend-card {
+      flex: 1;
+      min-width: 200px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .backend-card:hover { border-color: #4a90d9; background: #f5f9ff; }
+    .backend-card.selected { border-color: #4a90d9; background: #eef5ff; }
+    .backend-card input[type=radio] { display: none; }
+    .backend-name { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+    .backend-desc { font-size: 12px; color: #666; }
+
+    .detail-box {
+      margin-top: 14px;
+      padding: 12px 14px;
+      background: #f8f8f8;
+      border-radius: 7px;
+      font-size: 13px;
+    }
+    .detail-box.hidden { display: none; }
+    code {
+      background: #e8e8e8;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+    }
+    .detail-box a { color: #4a90d9; }
+
+    .toggle-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .toggle-label { font-size: 14px; }
+    .toggle-sub { font-size: 12px; color: #777; margin-top: 2px; }
+
+    .done-btn {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      background: #4a90d9;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 28px;
+      transition: background 0.15s;
+    }
+    .done-btn:hover { background: #357abd; }
+
+    .status {
+      font-size: 12px;
+      color: #888;
+      text-align: center;
+      margin-top: 10px;
+    }
+    .status.ok { color: #2ecc71; }
+    .status.err { color: #e74c3c; }
+  </style>
+</head>
+<body>
+  <div class="logo">🗂️</div>
+  <h1>Smart Tab Organizer</h1>
+  <p class="tagline">Automatically moves new tabs next to the most similar ones — and learns your habits over time.</p>
+
+  <!-- Step 1: Backend -->
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">1</div>
+      <div class="step-title">Choose how to match tabs</div>
+    </div>
+
+    <div class="backend-options">
+      <label class="backend-card selected" id="card-ollama">
+        <input type="radio" name="backend" value="ollama" checked>
+        <div class="backend-name">Ollama <span style="font-weight:400;color:#aaa;font-size:11px">recommended</span></div>
+        <div class="backend-desc">Runs locally on your machine. Fast, private, GPU-accelerated.</div>
+      </label>
+      <label class="backend-card" id="card-local">
+        <input type="radio" name="backend" value="local">
+        <div class="backend-name">Built-in model</div>
+        <div class="backend-desc">No setup needed. Downloads ~25 MB on first use, then works offline.</div>
+      </label>
+      <label class="backend-card" id="card-none">
+        <input type="radio" name="backend" value="none">
+        <div class="backend-name">Domain only</div>
+        <div class="backend-desc">No AI — groups tabs by website domain. No downloads, no server.</div>
+      </label>
+    </div>
+
+    <div class="detail-box" id="detail-ollama">
+      <strong>Ollama setup</strong><br><br>
+      1. <a href="https://ollama.com/download" target="_blank">Install Ollama</a> if you haven't already.<br><br>
+      2. Pull the embedding model:<br>
+      <code>ollama pull nomic-embed-text</code><br><br>
+      3. Start Ollama with extension access enabled:<br>
+      <code>OLLAMA_ORIGINS="*" ollama serve</code><br><br>
+      <span id="ollama-check-status" class="status">Checking for Ollama…</span>
+    </div>
+
+    <div class="detail-box hidden" id="detail-local">
+      <strong>Built-in model</strong><br><br>
+      The first time a tab is moved, the extension will download <code>all-MiniLM-L6-v2</code> (~25 MB) from Hugging Face and cache it in your browser. After that, it works fully offline. You can track download progress in the popup.
+    </div>
+
+    <div class="detail-box hidden" id="detail-none">
+      <strong>Domain-only matching</strong><br><br>
+      Tabs are grouped by their hostname (e.g. all <code>github.com</code> tabs together). No AI, no downloads, no external servers. You can always switch to a smarter backend later in the popup.
+    </div>
+  </div>
+
+  <!-- Step 2: Notifications -->
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">2</div>
+      <div class="step-title">Notifications when a tab is moved</div>
+    </div>
+
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">In-page overlay</div>
+        <div class="toggle-sub">A small toast inside the page. Requires permission to read all sites.</div>
+      </div>
+      <input type="checkbox" id="overlayToggle">
+    </div>
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">System notification</div>
+        <div class="toggle-sub">Always available as fallback, even without overlay permission.</div>
+      </div>
+      <input type="checkbox" id="systemToggle" checked disabled>
+    </div>
+    <p style="font-size:12px;color:#aaa;margin:4px 0 0">System notifications are always on. Overlay is optional.</p>
+  </div>
+
+  <button class="done-btn" id="doneBtn">Start organizing tabs</button>
+
+  <script src="chrome-compat.js"></script>
+  <script src="storage.js"></script>
+  <script>
+    // Backend selection
+    const cards = document.querySelectorAll('.backend-card');
+    const radios = document.querySelectorAll('input[name=backend]');
+    const details = { ollama: 'detail-ollama', local: 'detail-local', none: 'detail-none' };
+    const cardIds = { ollama: 'card-ollama', local: 'card-local', none: 'card-none' };
+
+    radios.forEach(r => r.addEventListener('change', () => selectBackend(r.value)));
+
+    function selectBackend(val) {
+      cards.forEach(c => c.classList.remove('selected'));
+      document.getElementById(cardIds[val]).classList.add('selected');
+      Object.entries(details).forEach(([k, id]) => {
+        document.getElementById(id).classList.toggle('hidden', k !== val);
+      });
+    }
+
+    // Check Ollama on load
+    (async () => {
+      const el = document.getElementById('ollama-check-status');
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), 2500);
+      try {
+        const r = await fetch('http://localhost:11434', { signal: controller.signal });
+        if (r.status < 500) {
+          el.textContent = '✓ Ollama is running';
+          el.className = 'status ok';
+        } else {
+          el.textContent = '✗ Ollama responded with an error';
+          el.className = 'status err';
+        }
+      } catch {
+        el.textContent = '✗ Ollama not detected — start it with the command above';
+        el.className = 'status err';
+      }
+    })();
+
+    // Overlay toggle
+    const overlayToggle = document.getElementById('overlayToggle');
+    browser.permissions.contains({ origins: ['<all_urls>'] }).then(has => {
+      overlayToggle.checked = has;
+    });
+    overlayToggle.addEventListener('change', async e => {
+      if (e.target.checked) {
+        const granted = await browser.permissions.request({ origins: ['<all_urls>'] });
+        overlayToggle.checked = granted;
+      } else {
+        await browser.permissions.remove({ origins: ['<all_urls>'] });
+      }
+    });
+
+    // Done button
+    document.getElementById('doneBtn').addEventListener('click', async () => {
+      const backend = document.querySelector('input[name=backend]:checked').value;
+      await storageSet('embeddingBackend', backend);
+
+      if (backend === 'ollama') {
+        const granted = await browser.permissions.request({ origins: ['http://localhost/*'] });
+        if (!granted) await storageSet('embeddingBackend', 'none');
+      }
+
+      window.close();
+    });
+  </script>
+</body>
+</html>

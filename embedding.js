@@ -5,6 +5,8 @@ const EMBED_TIMEOUT_MS = 3000;
 const NOISE_SUFFIX_RE = /\s*[-–|]\s*(Google Search|YouTube|MDN.*|Stack Overflow|Wikipedia.*|Mozilla Firefox|Google Chrome|Microsoft Edge|Safari)\s*$/i;
 
 const embeddingCache = new Map();
+let _localPipeline = null;
+let _localPipelineLoading = null;
 
 function preprocessTitle(title, url) {
   let text = (title || '').trim();
@@ -26,17 +28,12 @@ function preprocessTitle(title, url) {
   return text;
 }
 
-async function embed(text) {
-  if (!text) return null;
-  if (embeddingCache.has(text)) {
-    console.log('[TabOrg] embed cache hit:', text);
-    return embeddingCache.get(text);
-  }
+// --- Ollama backend ---
 
-  console.log('[TabOrg] embed fetch:', text);
+async function embedOllama(text) {
+  console.log('[TabOrg] embed ollama:', text);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), EMBED_TIMEOUT_MS);
-
   try {
     const response = await fetch(OLLAMA_URL, {
       method: 'POST',
@@ -45,28 +42,95 @@ async function embed(text) {
       signal: controller.signal,
     });
     if (!response.ok) {
-      console.warn('[TabOrg] embed HTTP error:', response.status, response.statusText);
+      console.warn('[TabOrg] Ollama HTTP error:', response.status, response.statusText);
       return null;
     }
     const data = await response.json();
     const vector = data.embedding;
     if (!Array.isArray(vector)) {
-      console.warn('[TabOrg] embed unexpected response shape:', data);
+      console.warn('[TabOrg] Ollama unexpected response shape:', data);
       return null;
     }
-    console.log('[TabOrg] embed ok:', text, `(${vector.length}d)`);
-    embeddingCache.set(text, vector);
+    console.log('[TabOrg] Ollama embed ok:', text, `(${vector.length}d)`);
     return vector;
   } catch (e) {
-    if (e.name === 'AbortError') {
-      console.warn('[TabOrg] embed timed out for:', text);
-    } else {
-      console.warn('[TabOrg] embed error:', e.message);
-    }
+    if (e.name === 'AbortError') console.warn('[TabOrg] Ollama embed timed out for:', text);
+    else console.warn('[TabOrg] Ollama embed error:', e.message);
     return null;
   } finally {
     clearTimeout(timer);
   }
+}
+
+// --- Local (transformers.js) backend ---
+
+async function loadLocalPipeline() {
+  if (_localPipeline) return _localPipeline;
+  if (_localPipelineLoading) return _localPipelineLoading;
+
+  _localPipelineLoading = (async () => {
+    console.log('[TabOrg] Loading local pipeline…');
+
+    const { pipeline, env } = window.TransformersJS;
+    env.backends.onnx.wasm.wasmPaths = browser.runtime.getURL('lib/');
+    env.backends.onnx.wasm.numThreads = 1;
+    env.allowRemoteModels = true;
+
+    console.log('[TabOrg] Downloading/loading Xenova/all-MiniLM-L6-v2 (first run may take a moment)…');
+    await storageSet('localModelStatus', 'loading');
+
+    _localPipeline = await pipeline(
+      'feature-extraction',
+      'Xenova/all-MiniLM-L6-v2',
+      { quantized: true }
+    );
+
+    await storageSet('localModelStatus', 'ready');
+    console.log('[TabOrg] Local pipeline ready');
+    return _localPipeline;
+  })();
+
+  try {
+    return await _localPipelineLoading;
+  } catch (e) {
+    _localPipelineLoading = null;
+    await storageSet('localModelStatus', 'error');
+    throw e;
+  }
+}
+
+async function embedLocal(text) {
+  try {
+    const pipe = await loadLocalPipeline();
+    const output = await pipe(text, { pooling: 'mean', normalize: true });
+    console.log('[TabOrg] Local embed ok:', text, `(${output.data.length}d)`);
+    return Array.from(output.data);
+  } catch (e) {
+    console.warn('[TabOrg] Local embed error:', e.message);
+    return null;
+  }
+}
+
+// --- Unified embed ---
+
+async function embed(text) {
+  if (!text) return null;
+  if (embeddingCache.has(text)) {
+    console.log('[TabOrg] embed cache hit:', text);
+    return embeddingCache.get(text);
+  }
+
+  const backend = await storageGet('embeddingBackend', 'ollama');
+  let vector = null;
+
+  if (backend === 'local') {
+    vector = await embedLocal(text);
+  } else if (backend === 'ollama') {
+    vector = await embedOllama(text);
+  }
+
+  if (vector) embeddingCache.set(text, vector);
+  return vector;
 }
 
 function cosineSimilarity(a, b) {

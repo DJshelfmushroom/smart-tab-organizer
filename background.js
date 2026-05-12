@@ -1,7 +1,7 @@
 const SCORE_THRESHOLD = 0.35;
 
 const pendingTabs = new Map();
-let programmaticMoveCount = 0;
+const programmaticMoves = new Set(); // tabIds we're currently moving — more precise than a counter
 
 const log  = (...a) => console.log( '[TabOrg]', ...a);
 const warn = (...a) => console.warn('[TabOrg]', ...a);
@@ -17,12 +17,17 @@ function isIgnoredTab(tab) {
 async function init() {
   await loadMatrix();
   await pruneMatrix();
-  setInterval(saveMatrix, 30_000);
-  window.addEventListener('beforeunload', () => saveMatrix());
+  browser.runtime.onSuspend?.addListener(() => saveMatrix());
   log('Initialized. Matrix loaded.');
 }
 
 init();
+
+browser.runtime.onInstalled.addListener(details => {
+  if (details.reason === 'install') {
+    browser.tabs.create({ url: browser.runtime.getURL('welcome.html') });
+  }
+});
 
 browser.tabs.onCreated.addListener(tab => {
   const fromNewTab = isNewTabUrl(tab.url);
@@ -69,7 +74,7 @@ browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 });
 
 browser.tabs.onMoved.addListener(async (tabId, moveInfo) => {
-  if (programmaticMoveCount > 0) {
+  if (programmaticMoves.has(tabId)) {
     log(`Tab #${tabId} moved programmatically — skipping habit recording`);
     return;
   }
@@ -88,7 +93,7 @@ browser.tabs.onMoved.addListener(async (tabId, moveInfo) => {
   const myClean = preprocessTitle(movedTab.title, movedTab.url);
   if (leftNeighbor) {
     log(`Recording co-occurrence: "${myClean}" ↔ "${preprocessTitle(leftNeighbor.title, leftNeighbor.url)}"`);
-    recordCooccurrence(myClean, preprocessTitle(leftNeighbor.title,  leftNeighbor.url));
+    recordCooccurrence(myClean, preprocessTitle(leftNeighbor.title, leftNeighbor.url));
   }
   if (rightNeighbor) {
     log(`Recording co-occurrence: "${myClean}" ↔ "${preprocessTitle(rightNeighbor.title, rightNeighbor.url)}"`);
@@ -118,70 +123,14 @@ async function notifyMoved(movedTitle, neighborTitle, reason) {
 function notifyOverlay(movedTitle, neighborTitle, reason) {
   browser.tabs.query({ active: true, currentWindow: true }).then(tabs => {
     if (!tabs[0]) { warn('notifyOverlay: no active tab'); return; }
-    const data = JSON.stringify({ neighborTitle, reason: reason || '' });
-    const code = `
-      (function() {
-        var d = ${data};
-        var prev = document.getElementById('__tab-org-toast__');
-        if (prev) prev.remove();
-
-        var host = document.createElement('div');
-        host.id = '__tab-org-toast__';
-        host.style.cssText = 'all:initial;position:fixed;bottom:20px;right:20px;z-index:2147483647;pointer-events:none;';
-        document.documentElement.appendChild(host);
-
-        var shadow = host.attachShadow({ mode: 'open' });
-
-        var style = document.createElement('style');
-        style.textContent = [
-          '.toast{font:13px/1.5 system-ui,sans-serif;background:rgba(24,24,24,0.93);color:#f0f0f0;',
-          'padding:10px 14px;border-radius:10px;max-width:300px;',
-          'box-shadow:0 6px 24px rgba(0,0,0,0.35);opacity:0;transform:translateY(6px);',
-          'transition:opacity 180ms ease,transform 180ms ease;backdrop-filter:blur(6px)}',
-          '.toast.show{opacity:1;transform:translateY(0)}',
-          '.tag{font-size:10px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:#888;margin-bottom:3px}',
-          '.reason{font-size:11px;color:#aaa;margin-top:3px}',
-        ].join('');
-
-        var toast = document.createElement('div');
-        toast.className = 'toast';
-
-        var tag = document.createElement('div');
-        tag.className = 'tag';
-        tag.textContent = 'Tab Organizer';
-
-        var body = document.createElement('div');
-        body.textContent = 'Moved next to: ' + d.neighborTitle;
-
-        toast.appendChild(tag);
-        toast.appendChild(body);
-
-        if (d.reason) {
-          var reasonEl = document.createElement('div');
-          reasonEl.className = 'reason';
-          reasonEl.textContent = d.reason;
-          toast.appendChild(reasonEl);
-        }
-
-        shadow.appendChild(style);
-        shadow.appendChild(toast);
-
-        requestAnimationFrame(function() {
-          requestAnimationFrame(function() { toast.classList.add('show'); });
-        });
-        setTimeout(function() {
-          toast.style.transition = 'opacity 250ms ease,transform 250ms ease';
-          toast.style.opacity = '0';
-          toast.style.transform = 'translateY(6px)';
-          setTimeout(function() { host.remove(); }, 260);
-        }, 3500);
-      })();
-    `;
-    browser.tabs.executeScript(tabs[0].id, { code })
-      .catch(e => {
-        warn('notifyOverlay executeScript failed, falling back to system notification:', e.message);
-        notifySystem(movedTitle, neighborTitle, reason);
-      });
+    browser.tabs.sendMessage(tabs[0].id, {
+      type: 'TAB_ORG_TOAST',
+      neighborTitle,
+      reason: reason || '',
+    }).catch(e => {
+      warn('sendMessage failed, falling back to system notification:', e.message);
+      notifySystem(movedTitle, neighborTitle, reason);
+    });
   });
 }
 
@@ -189,7 +138,7 @@ function notifySystem(movedTitle, neighborTitle, reason) {
   const id = `tab-organizer-${Date.now()}`;
   browser.notifications.create(id, {
     type: 'basic',
-    iconUrl: browser.runtime.getURL('icon.svg'),
+    iconUrl: browser.runtime.getURL('icon-48.png'),
     title: 'Tab Organizer',
     message: `Moved "${movedTitle}" next to "${neighborTitle}"${reason ? ` (${reason})` : ''}`,
   });
@@ -277,10 +226,10 @@ async function moveAdjacentTo(tab, targetTab) {
   }
 
   log(`Moving tab #${tab.id} from index ${tab.index} → ${targetIndex}`);
-  programmaticMoveCount++;
+  programmaticMoves.add(tab.id);
   try {
     await browser.tabs.move(tab.id, { index: targetIndex });
   } finally {
-    programmaticMoveCount--;
+    programmaticMoves.delete(tab.id);
   }
 }

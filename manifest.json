@@ -3,21 +3,29 @@
   "name": "Smart Tab Organizer",
   "version": "0.1.0",
   "description": "Automatically groups tabs by semantic similarity using local AI",
-  "permissions": ["tabs", "storage", "notifications", "http://localhost/*"],
-  "optional_permissions": ["<all_urls>"],
+  "permissions": ["tabs", "storage", "notifications"],
+  "optional_permissions": ["<all_urls>", "http://localhost/*"],
+  "content_security_policy": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';",
   "background": {
     "scripts": [
-      "browser-polyfill.js",
+      "chrome-compat.js",
       "storage.js",
       "habits.js",
+      "lib/transformers.js",
       "embedding.js",
       "background.js"
     ],
-    "persistent": true
+    "persistent": false
   },
-  "icons": { "48": "icon.svg" },
+  "content_scripts": [{
+    "matches": ["<all_urls>"],
+    "js": ["content/toast.js"],
+    "run_at": "document_idle"
+  }],
+  "icons": { "48": "icon-48.png", "96": "icon-96.png" },
   "browser_action": {
     "default_popup": "popup/popup.html",
-    "default_title": "Smart Tab Organizer"
+    "default_title": "Smart Tab Organizer",
+    "default_icon": { "48": "icon-48.png", "96": "icon-96.png" }
   }
 }

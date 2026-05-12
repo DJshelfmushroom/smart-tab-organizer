@@ -19,6 +19,14 @@
     }
     label { font-size: 14px; }
     .stat { font-size: 13px; color: #555; }
+    select {
+      font-size: 13px;
+      padding: 2px 4px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      background: white;
+      cursor: pointer;
+    }
     .status-indicator { display: flex; align-items: center; gap: 6px; }
     .dot {
       width: 10px;
@@ -27,9 +35,11 @@
       background: #aaa;
       flex-shrink: 0;
     }
-    .dot.online  { background: #2ecc71; }
-    .dot.offline { background: #e74c3c; }
-    #ollamaText { font-size: 13px; color: #555; }
+    .dot.online    { background: #2ecc71; }
+    .dot.offline   { background: #e74c3c; }
+    .dot.loading   { background: #f39c12; }
+    .dot.disabled  { background: #aaa; }
+    .status-text { font-size: 13px; color: #555; }
     button {
       font-size: 13px;
       padding: 4px 10px;
@@ -43,6 +53,7 @@
     }
     #clearBtn:hover { background: #fdecea; }
     hr { border: none; border-top: 1px solid #eee; margin: 10px 0; }
+    .hint { font-size: 11px; color: #999; margin-top: 2px; }
   </style>
 </head>
 <body>
@@ -60,11 +71,31 @@
   <hr>
 
   <div class="row">
-    <span class="stat">Ollama</span>
+    <label for="backendSelect">Embedding backend</label>
+    <select id="backendSelect">
+      <option value="ollama">Ollama</option>
+      <option value="local">Built-in model</option>
+      <option value="none">None (domain only)</option>
+    </select>
+  </div>
+
+  <div class="row" id="ollamaRow">
+    <span class="stat">Ollama status</span>
     <span class="status-indicator">
       <span class="dot" id="ollamaDot"></span>
-      <span id="ollamaText">Checking…</span>
+      <span class="status-text" id="ollamaText">—</span>
     </span>
+  </div>
+
+  <div class="row" id="localRow" style="display:none">
+    <span class="stat">Local model</span>
+    <span class="status-indicator">
+      <span class="dot" id="localDot"></span>
+      <span class="status-text" id="localText">—</span>
+    </span>
+  </div>
+  <div id="localHint" class="hint" style="display:none">
+    Downloads ~25 MB on first use, then cached.
   </div>
 
   <hr>
@@ -84,7 +115,7 @@
     <button id="clearBtn">Clear habit data</button>
   </div>
 
-  <script src="../browser-polyfill.js"></script>
+  <script src="../chrome-compat.js"></script>
   <script src="../storage.js"></script>
   <script src="popup.js"></script>
 </body>
