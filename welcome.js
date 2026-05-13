@@ -5,6 +5,10 @@ const cardIds  = { ollama: 'card-ollama',  local: 'card-local',  none: 'card-non
 
 radios.forEach(r => r.addEventListener('change', () => selectBackend(r.value)));
 
+// Clicking the Ollama card is a user gesture even when it's already selected,
+// so attach directly to the label element rather than the radio change event.
+document.getElementById('card-ollama').addEventListener('click', ensureLocalhostAndPoll);
+
 function selectBackend(val) {
   cards.forEach(c => c.classList.remove('selected'));
   document.getElementById(cardIds[val]).classList.add('selected');
@@ -26,31 +30,48 @@ async function checkOllama() {
   }
 }
 
-(async () => {
+let _ollamaInterval = null;
+
+function startOllamaPolling() {
+  if (_ollamaInterval) return;
   const el = document.getElementById('ollama-check-status');
+
   const poll = async () => {
     const state = await checkOllama();
     if (state === 'ok') {
       el.textContent = '✓ Ollama is running';
       el.className = 'status ok';
+      clearInterval(_ollamaInterval);
+      _ollamaInterval = null;
       return true;
-    } else if (state === 'err') {
-      el.textContent = '✗ Ollama responded with an error';
-      el.className = 'status err';
-      return true;
-    } else {
-      el.textContent = '✗ Ollama not detected — start it with the command above';
-      el.className = 'status err';
-      return false;
     }
+    el.textContent = state === 'err'
+      ? '✗ Ollama responded with an error'
+      : '✗ Ollama not detected — start it with the command above';
+    el.className = 'status err';
+    return false;
   };
 
-  if (!await poll()) {
-    const interval = setInterval(async () => {
-      if (await poll()) clearInterval(interval);
-    }, 3000);
+  poll().then(done => {
+    if (!done) _ollamaInterval = setInterval(poll, 3000);
+  });
+}
+
+// Called when Ollama card is selected — the click provides the user gesture
+// needed for permissions.request() in Chrome.
+async function ensureLocalhostAndPoll() {
+  const has = await browser.permissions.contains({ origins: ['http://localhost/*'] });
+  if (!has) {
+    const granted = await browser.permissions.request({ origins: ['http://localhost/*'] });
+    if (!granted) return;
   }
-})();
+  startOllamaPolling();
+}
+
+// On load: if permission is already granted (e.g. reinstall), poll immediately.
+browser.permissions.contains({ origins: ['http://localhost/*'] }).then(has => {
+  if (has) startOllamaPolling();
+});
 
 const overlayToggle = document.getElementById('overlayToggle');
 browser.permissions.contains({ origins: ['<all_urls>'] }).then(has => {

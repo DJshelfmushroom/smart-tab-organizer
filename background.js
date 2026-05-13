@@ -44,32 +44,28 @@ browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (!pendingTabs.has(tabId)) return;
 
   const pending = pendingTabs.get(tabId);
+  pendingTabs.delete(tabId); // must happen before first await to block concurrent onUpdated handlers
 
   if (!pending.fromNewTab) {
     log(`Tab #${tabId} updated but not from new tab — skipping`);
-    pendingTabs.delete(tabId);
     return;
   }
   if (isIgnoredTab(tab)) {
     log(`Tab #${tabId} is Firefox View — skipping`);
-    pendingTabs.delete(tabId);
     return;
   }
   if (tab.pinned) {
     log(`Tab #${tabId} is pinned — skipping`);
-    pendingTabs.delete(tabId);
     return;
   }
 
   const enabled = await storageGet('enabled', true);
   if (!enabled) {
     log('Extension disabled — skipping reposition');
-    pendingTabs.delete(tabId);
     return;
   }
 
   log(`Tab #${tabId} navigated to "${tab.title}" — starting reposition`);
-  pendingTabs.delete(tabId);
   await repositionTab(tab);
 });
 
