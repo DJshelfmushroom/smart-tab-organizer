@@ -13,22 +13,42 @@ function selectBackend(val) {
   });
 }
 
-(async () => {
-  const el = document.getElementById('ollama-check-status');
+async function checkOllama() {
   const controller = new AbortController();
-  setTimeout(() => controller.abort(), 2500);
+  const timer = setTimeout(() => controller.abort(), 2500);
   try {
     const r = await fetch('http://localhost:11434', { signal: controller.signal });
-    if (r.status < 500) {
+    clearTimeout(timer);
+    return r.status < 500 ? 'ok' : 'err';
+  } catch {
+    clearTimeout(timer);
+    return 'offline';
+  }
+}
+
+(async () => {
+  const el = document.getElementById('ollama-check-status');
+  const poll = async () => {
+    const state = await checkOllama();
+    if (state === 'ok') {
       el.textContent = '✓ Ollama is running';
       el.className = 'status ok';
-    } else {
+      return true;
+    } else if (state === 'err') {
       el.textContent = '✗ Ollama responded with an error';
       el.className = 'status err';
+      return true;
+    } else {
+      el.textContent = '✗ Ollama not detected — start it with the command above';
+      el.className = 'status err';
+      return false;
     }
-  } catch {
-    el.textContent = '✗ Ollama not detected — start it with the command above';
-    el.className = 'status err';
+  };
+
+  if (!await poll()) {
+    const interval = setInterval(async () => {
+      if (await poll()) clearInterval(interval);
+    }, 3000);
   }
 })();
 
