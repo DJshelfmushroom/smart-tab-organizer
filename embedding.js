@@ -71,7 +71,7 @@ async function loadLocalPipeline() {
   _localPipelineLoading = (async () => {
     console.log('[TabOrg] Loading local pipeline…');
 
-    const { pipeline, env } = window.TransformersJS;
+    const { pipeline, env } = globalThis.TransformersJS;
     env.backends.onnx.wasm.wasmPaths = browser.runtime.getURL('lib/');
     env.backends.onnx.wasm.numThreads = 1;
     env.allowRemoteModels = true;
