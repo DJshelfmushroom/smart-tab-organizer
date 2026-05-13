@@ -1,5 +1,6 @@
 const esbuild = require('esbuild');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { execSync } = require('child_process');
 
@@ -83,7 +84,7 @@ function makeZips() {
   // Chrome zip: manifest.chrome.json → manifest.json, plus background.sw.js
   if (fs.existsSync('chrome.zip')) fs.unlinkSync('chrome.zip');
   // Stage manifest.chrome.json as manifest.json in a temp dir, then zip
-  const tmp = fs.mkdtempSync('tab-org-chrome-');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tab-org-chrome-'));
   try {
     fs.cpSync('.', tmp, {
       recursive: true,
