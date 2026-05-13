@@ -3,3 +3,4 @@ package-lock.json
 lib/
 firefox.zip
 chrome.zip
+signed/

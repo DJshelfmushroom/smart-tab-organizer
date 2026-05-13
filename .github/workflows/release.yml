@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: node build.js
+
+      - name: Sign Firefox extension
+        run: |
+          ./node_modules/.bin/web-ext sign \
+            --source-dir . \
+            --artifacts-dir signed \
+            --channel unlisted \
+            --api-key ${{ secrets.AMO_API_KEY }} \
+            --api-secret ${{ secrets.AMO_API_SECRET }} \
+            --ignore-files \
+              "node_modules/**" ".git/**" ".github/**" "signed/**" \
+              "build.js" "release.js" \
+              "package.json" "package-lock.json" \
+              "*.md" "*.zip" \
+              "manifest.chrome.json" "background.sw.js"
+
+      - name: Get signed XPI path
+        id: xpi
+        run: echo "path=$(ls signed/*.xpi | tail -1)" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${{ github.ref_name }} \
+            ${{ steps.xpi.outputs.path }} \
+            chrome.zip \
+            --title "${{ github.ref_name }}" \
+            --notes "## Install
+
+          **Firefox**: download the \`.xpi\` and open it in Firefox (or drag it onto the browser).
+          **Chrome**: download \`chrome.zip\`, unzip, and load unpacked via \`chrome://extensions\`.
+
+          ## Build from source
+          \`\`\`bash
+          npm install && node build.js
+          \`\`\`" \
+          || gh release upload ${{ github.ref_name }} \
+            ${{ steps.xpi.outputs.path }} \
+            chrome.zip \
+            --clobber
