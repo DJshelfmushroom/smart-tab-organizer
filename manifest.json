@@ -1,8 +1,21 @@
 {
   "manifest_version": 2,
   "name": "Smart Tab Organizer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Automatically groups tabs by semantic similarity using local AI",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "smart-tab-organizer@djshelfmushroom",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": ["none"],
+        "optional": []
+      }
+    },
+    "gecko_android": {
+      "strict_min_version": "142.0"
+    }
+  },
   "permissions": ["tabs", "storage", "notifications"],
   "optional_permissions": ["<all_urls>", "http://localhost/*"],
   "content_security_policy": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';",
